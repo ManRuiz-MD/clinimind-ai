@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CliniMind AI · Análisis interpretativo de estudios clínicos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{
+  --azul-inst:#1B4F72;
+  --azul-claro:#EAF1F8;
+  --verde-clinico:#4FA592;
+  --gris-claro:#F4F6F8;
+  --gris-medio:#8592A0;
+  --texto:#1E2A33;
+  --blanco:#FFFFFF;
+  --borrador:#C77A2E;
+  --revisado:#2E6DA4;
+  --aprobado:#3E8E63;
+  --alerta:#B24444;
+  --radius:10px;
+  --sombra:0 1px 3px rgba(27,79,114,.10), 0 1px 2px rgba(27,79,114,.06);
+}
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,'Open Sans',Arial,sans-serif;
+  background:var(--gris-claro);
+  color:var(--texto);
+  line-height:1.5;
+}
+header.app-header{
+  background:var(--azul-inst);
+  color:#fff;
+  padding:18px 28px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:10px;
+}
+header.app-header h1{
+  margin:0;
+  font-size:1.35rem;
+  font-weight:600;
+  letter-spacing:.2px;
+}
+header.app-header .subt{
+  font-size:.8rem;
+  color:#CBDCEC;
+  margin-top:2px;
+}
+.top-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.btn{
+  border:none;
+  border-radius:8px;
+  padding:9px 16px;
+  font-size:.88rem;
+  font-weight:600;
+  cursor:pointer;
+  transition:background .15s ease, transform .05s ease;
+}
+.btn:active{transform:scale(.98);}
+.btn-primary{background:var(--verde-clinico);color:#fff;}
+.btn-primary:hover{background:#3f8f7d;}
+.btn-secondary{background:#fff;color:var(--azul-inst);border:1px solid #cdd8e2;}
+.btn-secondary:hover{background:var(--azul-claro);}
+.btn-outline-light{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);}
+.btn-outline-light:hover{background:rgba(255,255,255,.12);}
+.btn-danger{background:transparent;color:var(--alerta);border:1px solid var(--alerta);}
+.btn-danger:hover{background:#FBEAEA;}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+main{max-width:1100px;margin:0 auto;padding:26px 20px 60px;}
+nav.tabs{display:flex;gap:4px;margin-bottom:22px;border-bottom:1px solid #DDE4EA;}
+nav.tabs button{
+  background:none;border:none;padding:12px 18px;font-size:.92rem;font-weight:600;
+  color:var(--gris-medio);cursor:pointer;border-bottom:2px solid transparent;
+}
+nav.tabs button.active{color:var(--azul-inst);border-bottom-color:var(--verde-clinico);}
+.card{
+  background:var(--blanco);
+  border-radius:var(--radius);
+  box-shadow:var(--sombra);
+  padding:24px;
+  margin-bottom:20px;
+}
+.card h2{margin-top:0;font-size:1.1rem;color:var(--azul-inst);}
+.hint{color:var(--gris-medio);font-size:.85rem;margin-top:-6px;margin-bottom:14px;}
+label{display:block;font-size:.85rem;font-weight:600;margin:14px 0 6px;color:var(--texto);}
+input[type=text], input[type=password], select, textarea{
+  width:100%;padding:10px 12px;border:1px solid #CCD6E0;border-radius:8px;
+  font-size:.92rem;font-family:inherit;background:#fff;color:var(--texto);
+}
+textarea{resize:vertical;min-height:90px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media (max-width:640px){.grid2{grid-template-columns:1fr;}}
+.dropzone{
+  border:2px dashed #B9C8D6;border-radius:var(--radius);padding:30px;text-align:center;
+  color:var(--gris-medio);cursor:pointer;transition:border-color .15s, background .15s;
+  margin-top:8px;
+}
+.dropzone.dragover{border-color:var(--verde-clinico);background:var(--azul-claro);}
+.dropzone strong{color:var(--azul-inst);}
+.preview-wrap{margin-top:14px;display:flex;gap:14px;flex-wrap:wrap;}
+.preview-item{position:relative;width:150px;}
+.preview-item img{width:100%;border-radius:8px;border:1px solid #DDE4EA;display:block;}
+.preview-item .fname{font-size:.72rem;color:var(--gris-medio);margin-top:4px;word-break:break-all;}
+.preview-item .rm{
+  position:absolute;top:-8px;right:-8px;background:var(--alerta);color:#fff;border:none;
+  border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:.8rem;line-height:1;
+}
+.status-badge{
+  display:inline-block;padding:4px 11px;border-radius:20px;font-size:.75rem;font-weight:700;
+  letter-spacing:.2px;
+}
+.badge-borrador{background:#FBEEDF;color:var(--borrador);}
+.badge-revisado{background:#E3EEF9;color:var(--revisado);}
+.badge-aprobado{background:#E4F3EA;color:var(--aprobado);}
+.case-list{display:flex;flex-direction:column;gap:10px;}
+.case-row{
+  display:flex;justify-content:space-between;align-items:center;padding:14px 16px;
+  border:1px solid #E4E9EE;border-radius:8px;cursor:pointer;background:#fff;
+}
+.case-row:hover{background:var(--azul-claro);}
+.case-row .meta{font-size:.8rem;color:var(--gris-medio);margin-top:3px;}
+.case-row .right{display:flex;align-items:center;gap:10px;}
+.empty-state{text-align:center;padding:50px 20px;color:var(--gris-medio);}
+.empty-state .icono{font-size:2.4rem;margin-bottom:10px;}
+.report-block{border:1px solid #E4E9EE;border-radius:8px;padding:18px;margin-top:10px;background:#FCFDFE;}
+.report-block h3{margin:0 0 8px;font-size:.95rem;color:var(--azul-inst);}
+.report-block p{white-space:pre-wrap;font-size:.9rem;margin:0;}
+.spinner{
+  border:3px solid #E4E9EE;border-top:3px solid var(--verde-clinico);border-radius:50%;
+  width:22px;height:22px;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+.flow-steps{display:flex;align-items:center;gap:8px;margin:18px 0;flex-wrap:wrap;}
+.flow-steps .step{
+  padding:7px 14px;border-radius:20px;font-size:.78rem;font-weight:600;background:#EEF2F5;color:var(--gris-medio);
+}
+.flow-steps .step.current{background:var(--azul-inst);color:#fff;}
+.flow-steps .arrow{color:var(--gris-medio);}
+.alert-box{
+  background:#FBEEDF;border:1px solid #F0D2A8;color:#8A5A1E;border-radius:8px;
+  padding:12px 16px;font-size:.85rem;margin:14px 0;
+}
+.alert-box.error{background:#FBEAEA;border-color:#E9BEBE;color:#8A2E2E;}
+footer.note{text-align:center;color:var(--gris-medio);font-size:.75rem;margin-top:30px;padding-bottom:10px;}
+dialog.modal{
+  border:none;border-radius:var(--radius);padding:0;max-width:520px;width:92%;box-shadow:0 10px 40px rgba(0,0,0,.2);
+}
+dialog.modal::backdrop{background:rgba(20,30,40,.45);}
+.modal-inner{padding:24px;}
+.modal-inner h2{margin-top:0;}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px;}
+.tag-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;}
+.tag{background:var(--azul-claro);color:var(--azul-inst);padding:4px 10px;border-radius:14px;font-size:.75rem;font-weight:600;}
+.section-divider{border:none;border-top:1px solid #E4E9EE;margin:22px 0;}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div>
+    <h1>CliniMind AI</h1>
+    <div class="subt">Análisis interpretativo asistido por IA de estudios clínicos</div>
+  </div>
+  <div class="top-actions">
+    <button class="btn btn-outline-light" id="btnConfig">Configuración</button>
+  </div>
+</header>
+
+<main>
+
+  <nav class="tabs">
+    <button data-tab="nuevo" class="active">Nuevo estudio</button>
+    <button data-tab="casos">Casos</button>
+    <button data-tab="biblioteca">Biblioteca de referencia</button>
+  </nav>
+
+  <!-- ===================== TAB: NUEVO ESTUDIO ===================== -->
+  <section id="tab-nuevo">
+
+    <div class="card" id="cardSinClave" style="display:none;">
+      <div class="alert-box">
+        Configura tu clave de API de Anthropic antes de analizar un estudio. Ve a <strong>Configuración</strong> arriba a la derecha.
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Datos del estudio</h2>
+      <div class="grid2">
+        <div>
+          <label>Categoría</label>
+          <select id="categoria">
+            <option value="imagen">Imagen médica (rayos X / TAC / RM / ultrasonido)</option>
+            <option value="fisiologico">Estudio fisiológico</option>
+          </select>
+        </div>
+        <div id="wrapTipoImagen">
+          <label>Tipo de imagen</label>
+          <select id="tipoImagen">
+            <option value="radiografia">Radiografía</option>
+            <option value="tac">Tomografía computarizada (TAC)</option>
+            <option value="rm">Resonancia magnética (RM)</option>
+            <option value="ultrasonido">Ultrasonido</option>
+          </select>
+        </div>
+        <div id="wrapTipoFisio" style="display:none;">
+          <label>Tipo de estudio fisiológico</label>
+          <select id="tipoFisio">
+            <option value="ekg">Electrocardiograma (EKG)</option>
+            <option value="impedanciometria">Impedanciometría</option>
+            <option value="densitometria">Densitometría ósea</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+      </div>
+      <div id="wrapOtroFisio" style="display:none;">
+        <label>Especifique el estudio</label>
+        <input type="text" id="otroFisioTexto" placeholder="Ej. Espirometría, prueba de esfuerzo...">
+      </div>
+
+      <label>Región / área anatómica (opcional)</label>
+      <input type="text" id="region" placeholder="Ej. Tórax, rodilla derecha, abdomen...">
+
+      <label>Datos clínicos relevantes (opcional)</label>
+      <textarea id="contextoClinico" placeholder="Edad, síntomas, antecedentes, motivo del estudio..."></textarea>
+
+      <label>Archivos del estudio (una o varias imágenes o PDF)</label>
+      <div class="dropzone" id="dropzone">
+        <div><strong>Haz clic para elegir uno o más archivos</strong> o arrástralos aquí</div>
+        <div style="font-size:.78rem;margin-top:6px;">JPG, PNG, GIF, WEBP o PDF · puedes agregar varias vistas (ej. tórax PA + lateral)</div>
+        <input type="file" id="fileInput" accept="image/*,.pdf" multiple style="display:none;">
+      </div>
+      <div class="preview-wrap" id="previewWrap"></div>
+
+      <div style="margin-top:20px;">
+        <button class="btn btn-primary" id="btnAnalizar" disabled>Analizar con IA</button>
+      </div>
+      <div id="analizarStatus" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="card" id="cardResultado" style="display:none;">
+      <h2>Resultado del análisis</h2>
+      <div class="flow-steps" id="flowSteps"></div>
+      <div class="report-block" id="reporteContenido"></div>
+
+      <div style="margin-top:16px;">
+        <label>Notas / ajustes del médico</label>
+        <textarea id="notasMedico" placeholder="Edite o complemente los hallazgos antes de aprobar..."></textarea>
+      </div>
+
+      <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-secondary" id="btnMarcarRevisado" style="display:none;">Marcar como revisado</button>
+        <button class="btn btn-primary" id="btnAprobarFirmar" style="display:none;">Aprobar y firmar</button>
+        <button class="btn btn-secondary" id="btnExportarPDF" style="display:none;">Exportar reporte en PDF</button>
+        <button class="btn btn-danger" id="btnDescartar">Descartar</button>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ===================== TAB: CASOS ===================== -->
+  <section id="tab-casos" style="display:none;">
+    <div class="card">
+      <h2>Casos guardados</h2>
+      <p class="hint">Los casos se guardan localmente en este navegador.</p>
+      <div class="case-list" id="listaCasos"></div>
+      <div class="empty-state" id="casosVacio" style="display:none;">
+        <div class="icono">📋</div>
+        <div>Aún no hay casos guardados.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== TAB: BIBLIOTECA ===================== -->
+  <section id="tab-biblioteca" style="display:none;">
+    <div class="card">
+      <h2>Biblioteca de referencia</h2>
+      <p class="hint">Casos aprobados y firmados que alimentan el contexto de futuros análisis por disciplina.</p>
+      <div class="case-list" id="listaBiblioteca"></div>
+      <div class="empty-state" id="bibliotecaVacio" style="display:none;">
+        <div class="icono">📚</div>
+        <div>Aún no hay casos aprobados en la biblioteca.</div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="note">
+    CliniMind AI — herramienta de apoyo interpretativo. No sustituye el criterio médico ni constituye un dispositivo diagnóstico aprobado.
+  </footer>
+
+</main>
+
+<!-- Modal de configuración -->
+<dialog class="modal" id="modalConfig">
+  <div class="modal-inner">
+    <h2>Configuración</h2>
+    <label>Proveedor de IA</label>
+    <select id="proveedorSelect">
+      <option value="anthropic">Anthropic (Claude)</option>
+      <option value="openai">OpenAI (GPT-4o)</option>
+      <option value="gemini">Google Gemini</option>
+      <option value="groq">Groq (Llama vision)</option>
+    </select>
+    <label id="labelApiKey">Clave de API</label>
+    <input type="password" id="apiKeyInput" placeholder="Pega aquí tu clave">
+    <label id="labelModelo">Modelo</label>
+    <input type="text" id="modeloInput" placeholder="Nombre exacto del modelo">
+    <p class="hint">Escribe el identificador exacto del modelo tal como lo indica la documentación de tu proveedor (por ejemplo, si un modelo se retira o cambia de nombre, solo actualiza este campo, sin depender de una versión fija). Se deja un valor sugerido, pero puedes reemplazarlo por cualquier modelo con capacidad de visión que tengas disponible en tu cuenta.</p>
+    <p class="hint" id="hintProveedor">Tu clave se guarda solo en este navegador (localStorage) y se usa únicamente para llamar directamente a la API del proveedor elegido desde este archivo.</p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="btnCerrarConfig">Cancelar</button>
+      <button class="btn btn-primary" id="btnGuardarConfig">Guardar</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Modal de caso (ver detalle) -->
+<dialog class="modal" id="modalCaso">
+  <div class="modal-inner" id="modalCasoContenido"></div>
+</dialog>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+
+const LS_KEYS = { apiKey: 'clinimind_api_key', proveedor: 'clinimind_proveedor', modelo: 'clinimind_modelo', casos: 'clinimind_casos' };
+let archivosActuales = [];     // lista de { tipo:'image'|'pdf', dataUrlPng, nombre }
+let casoEnCurso = null;        // objeto de caso en memoria mientras se revisa
+
+const PROVEEDORES = {
+  anthropic: { nombre:'Anthropic (Claude)', placeholder:'sk-ant-...', modeloDefault:'claude-sonnet-4-6' },
+  openai:    { nombre:'OpenAI (GPT-4o)',     placeholder:'sk-...',     modeloDefault:'gpt-4o' },
+  gemini:    { nombre:'Google Gemini',       placeholder:'AIza...',    modeloDefault:'gemini-1.5-pro' },
+  groq:      { nombre:'Groq (Llama vision)', placeholder:'gsk_...',    modeloDefault:'llama-3.2-90b-vision-preview' }
+};
+
+// ---------- Utilidades de almacenamiento ----------
+function getCasos(){
+  try { return JSON.parse(localStorage.getItem(LS_KEYS.casos) || '[]'); }
+  catch(e){ return []; }
+}
+function saveCasos(casos){ localStorage.setItem(LS_KEYS.casos, JSON.stringify(casos)); }
+function getApiKey(){ return localStorage.getItem(LS_KEYS.apiKey) || ''; }
+function getProveedor(){ return localStorage.getItem(LS_KEYS.proveedor) || 'anthropic'; }
+function getModelo(proveedor){
+  proveedor = proveedor || getProveedor();
+  const guardado = localStorage.getItem(LS_KEYS.modelo + '_' + proveedor);
+  return guardado || PROVEEDORES[proveedor].modeloDefault;
+}
+
+// ---------- Tabs ----------
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    ['nuevo','casos','biblioteca'].forEach(t=>{
+      document.getElementById('tab-'+t).style.display = (t===btn.dataset.tab)?'block':'none';
+    });
+    if(btn.dataset.tab==='casos') renderCasos();
+    if(btn.dataset.tab==='biblioteca') renderBiblioteca();
+  });
+});
+
+// ---------- Configuración ----------
+const modalConfig = document.getElementById('modalConfig');
+const proveedorSelect = document.getElementById('proveedorSelect');
+
+function refrescarCamposProveedor(){
+  const info = PROVEEDORES[proveedorSelect.value];
+  document.getElementById('labelApiKey').textContent = `Clave de API — ${info.nombre}`;
+  document.getElementById('apiKeyInput').placeholder = info.placeholder;
+  document.getElementById('labelModelo').textContent = `Modelo — ${info.nombre}`;
+  document.getElementById('modeloInput').placeholder = info.modeloDefault;
+  document.getElementById('modeloInput').value = getModelo(proveedorSelect.value);
+  document.getElementById('hintProveedor').textContent =
+    `Tu clave se guarda solo en este navegador (localStorage) y se usa únicamente para llamar directamente a la API de ${info.nombre} desde este archivo.`;
+}
+proveedorSelect.addEventListener('change', refrescarCamposProveedor);
+
+document.getElementById('btnConfig').addEventListener('click', ()=>{
+  proveedorSelect.value = getProveedor();
+  document.getElementById('apiKeyInput').value = getApiKey();
+  refrescarCamposProveedor();
+  modalConfig.showModal();
+});
+document.getElementById('btnCerrarConfig').addEventListener('click', ()=> modalConfig.close());
+document.getElementById('btnGuardarConfig').addEventListener('click', ()=>{
+  const val = document.getElementById('apiKeyInput').value.trim();
+  const modeloVal = document.getElementById('modeloInput').value.trim();
+  const proveedorVal = proveedorSelect.value;
+  localStorage.setItem(LS_KEYS.proveedor, proveedorVal);
+  if(val) localStorage.setItem(LS_KEYS.apiKey, val);
+  if(modeloVal) localStorage.setItem(LS_KEYS.modelo + '_' + proveedorVal, modeloVal);
+  modalConfig.close();
+  actualizarEstadoClave();
+});
+function actualizarEstadoClave(){
+  const tieneClave = !!getApiKey();
+  document.getElementById('cardSinClave').style.display = tieneClave ? 'none' : 'block';
+  document.getElementById('btnAnalizar').disabled = !tieneClave || !archivosActuales.length;
+}
+actualizarEstadoClave();
+
+// ---------- Categoría / tipo de estudio ----------
+const categoriaSel = document.getElementById('categoria');
+const wrapTipoImagen = document.getElementById('wrapTipoImagen');
+const wrapTipoFisio = document.getElementById('wrapTipoFisio');
+const wrapOtroFisio = document.getElementById('wrapOtroFisio');
+const tipoFisioSel = document.getElementById('tipoFisio');
+
+categoriaSel.addEventListener('change', ()=>{
+  const esImagen = categoriaSel.value === 'imagen';
+  wrapTipoImagen.style.display = esImagen ? 'block' : 'none';
+  wrapTipoFisio.style.display = esImagen ? 'none' : 'block';
+  wrapOtroFisio.style.display = (!esImagen && tipoFisioSel.value==='otro') ? 'block' : 'none';
+});
+tipoFisioSel.addEventListener('change', ()=>{
+  wrapOtroFisio.style.display = (tipoFisioSel.value==='otro') ? 'block' : 'none';
+});
+
+// ---------- Carga y normalización de archivos ----------
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const previewWrap = document.getElementById('previewWrap');
+
+dropzone.addEventListener('click', ()=> fileInput.click());
+dropzone.addEventListener('dragover', e=>{ e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', ()=> dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', e=>{
+  e.preventDefault(); dropzone.classList.remove('dragover');
+  if(e.dataTransfer.files.length) manejarArchivos(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', e=>{
+  if(e.target.files.length) manejarArchivos(e.target.files);
+  fileInput.value = ''; // permite volver a elegir el mismo archivo si se quita y se re-agrega
+});
+
+async function manejarArchivos(fileList){
+  document.getElementById('analizarStatus').innerHTML = '';
+  const archivos = Array.from(fileList);
+
+  for(const file of archivos){
+    try{
+      let entrada;
+      if(file.type === 'application/pdf'){
+        const dataUrlPng = await pdfAPngPrimeraPagina(file);
+        entrada = { tipo:'pdf', dataUrlPng, nombre:file.name };
+      } else if(file.type.startsWith('image/')){
+        const dataUrlPng = await normalizarImagenAPng(file);
+        entrada = { tipo:'image', dataUrlPng, nombre:file.name };
+      } else {
+        throw new Error(`"${file.name}" no es un formato soportado (usa imagen o PDF).`);
+      }
+      archivosActuales.push(entrada);
+      mostrarPreview(entrada, archivosActuales.length - 1);
+    } catch(err){
+      document.getElementById('analizarStatus').innerHTML +=
+        `<div class="alert-box error">No se pudo procesar "${file.name}": ${err.message}</div>`;
+    }
+  }
+  actualizarEstadoClave();
+}
+
+// Toda imagen (incluyendo GIF) se normaliza a PNG sin pérdida vía canvas
+function normalizarImagenAPng(file){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      img.onload = ()=>{
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = ()=> reject(new Error('No se pudo leer la imagen.'));
+      img.src = reader.result;
+    };
+    reader.onerror = ()=> reject(new Error('No se pudo leer el archivo.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+// PDF: si no tiene texto extraíble (ej. creado a partir de una imagen), se rasteriza la primera página como imagen
+async function pdfAPngPrimeraPagina(file){
+  const buffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  const page = await pdf.getPage(1);
+
+  // Intentar extraer texto primero; si hay texto útil, igual rasterizamos la página
+  // para el análisis visual (el modelo de visión trabaja sobre imagen).
+  const viewport = page.getViewport({ scale: 2 });
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  const ctx = canvas.getContext('2d');
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  return canvas.toDataURL('image/png');
+}
+
+function mostrarPreview(archivo, indice){
+  const item = document.createElement('div');
+  item.className = 'preview-item';
+  item.dataset.indice = indice;
+  item.innerHTML = `
+    <img src="${archivo.dataUrlPng}">
+    <div class="fname">${archivo.nombre}</div>
+    <button class="rm" title="Quitar">×</button>
+  `;
+  item.querySelector('.rm').addEventListener('click', ()=>{
+    const idxActual = Number(item.dataset.indice);
+    archivosActuales = archivosActuales.filter((_, i) => i !== idxActual);
+    rerenderPreviews();
+    actualizarEstadoClave();
+  });
+  previewWrap.appendChild(item);
+}
+
+function rerenderPreviews(){
+  previewWrap.innerHTML = '';
+  archivosActuales.forEach((a, i) => mostrarPreview(a, i));
+}
+
+// ---------- Prompting por disciplina ----------
+function construirPromptSistema(categoria, tipoEstudio, region, contexto, referencias, cantidadImagenes){
+  const base = `Eres un asistente de apoyo interpretativo para un médico. Tu función es generar un borrador de análisis estructurado de un estudio clínico, para que el médico lo revise, edite y apruebe. NUNCA presentes el resultado como un diagnóstico definitivo ni reemplazas el criterio clínico. Responde siempre en español, en formato claro con secciones: "Hallazgos", "Impresión diagnóstica sugerida" e "Recomendaciones", seguido de una nota indicando que es un borrador generado por IA pendiente de revisión médica.`;
+
+  const porDisciplina = {
+    radiografia: 'El estudio es una radiografía. Describe estructuras óseas, tejidos blandos visibles, simetría, posibles hallazgos patológicos (fracturas, opacidades, derrames, etc.) según la región indicada.',
+    tac: 'El estudio es una tomografía computarizada (TAC). Describe los cortes visibles, densidades, posibles lesiones, y compara estructuras si es relevante.',
+    rm: 'El estudio es una resonancia magnética (RM). Describe las secuencias visibles si son identificables, señales de tejidos, y posibles hallazgos relevantes según la región.',
+    ultrasonido: 'El estudio es un ultrasonido. Describe ecogenicidad, estructuras visibles, presencia de líquidos, contornos y posibles hallazgos relevantes.',
+    ekg: 'El estudio es un electrocardiograma (EKG). Describe ritmo, frecuencia, eje, morfología de ondas (P, QRS, T), intervalos (PR, QT) y cualquier alteración visible en el trazo.',
+    impedanciometria: 'El estudio es una impedanciometría (composición corporal). Describe los parámetros visibles (masa grasa, masa muscular, agua corporal, etc.) y su interpretación clínica general.',
+    densitometria: 'El estudio es una densitometría ósea. Describe los valores de densidad mineral ósea visibles, T-score/Z-score si están presentes, y su interpretación según categorías estándar (normal, osteopenia, osteoporosis).',
+    otro: 'El estudio corresponde a un tipo de prueba fisiológica no listada explícitamente. Analiza los datos visibles de la manera más rigurosa posible, indicando claramente qué tipo de estudio parece ser según lo que se observa.'
+  };
+
+  let prompt = base + '\n\n' + (porDisciplina[tipoEstudio] || porDisciplina.otro);
+  if(cantidadImagenes && cantidadImagenes > 1){
+    prompt += `\n\nSe adjuntan ${cantidadImagenes} archivos/vistas del mismo estudio (por ejemplo, distintas proyecciones, páginas o ángulos). Analízalos en conjunto como un solo caso clínico e intégralos en un único reporte, señalando si algún hallazgo se confirma o se aprecia mejor en una vista en particular.`;
+  }
+  if(region) prompt += `\nRegión/área anatómica indicada por el médico: ${region}.`;
+  if(contexto) prompt += `\nDatos clínicos aportados por el médico: ${contexto}`;
+  if(referencias && referencias.length){
+    prompt += `\n\nComo referencia de estilo y criterio (no como fuente de verdad clínica), aquí hay notas de casos previos ya aprobados por el médico para esta misma disciplina:\n`;
+    referencias.forEach((r,i)=>{ prompt += `\n[Referencia ${i+1}] ${r}`; });
+  }
+  return prompt;
+}
+
+// Biblioteca de referencia progresiva: notas de casos aprobados, por disciplina
+function obtenerReferenciasPorDisciplina(tipoEstudio){
+  const casos = getCasos();
+  return casos
+    .filter(c => c.tipoEstudio === tipoEstudio && c.estado === 'aprobado' && c.notasFinal)
+    .slice(-3)
+    .map(c => c.notasFinal.slice(0, 400));
+}
+
+// ---------- Llamada a la API del proveedor elegido (BYOK) ----------
+async function analizarConIA({ imagenesDataUrl, promptSistema }){
+  const proveedor = getProveedor();
+  const apiKey = getApiKey();
+  const modelo = getModelo();
+  const instruccionUsuario = imagenesDataUrl.length > 1
+    ? `Analiza estas ${imagenesDataUrl.length} vistas/archivos del mismo estudio en conjunto y genera un único borrador estructurado según las instrucciones.`
+    : 'Analiza este estudio y genera el borrador estructurado según las instrucciones.';
+
+  if(proveedor === 'anthropic'){
+    const bloquesImagen = imagenesDataUrl.map(url => ({
+      type: 'image',
+      source: { type: 'base64', media_type: 'image/png', data: url.split(',')[1] }
+    }));
+    const respuesta = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: modelo,
+        max_tokens: 1500,
+        system: promptSistema,
+        messages: [{
+          role: 'user',
+          content: [ ...bloquesImagen, { type: 'text', text: instruccionUsuario } ]
+        }]
+      })
+    });
+    if(!respuesta.ok) throw new Error(await mensajeErrorApi(respuesta));
+    const data = await respuesta.json();
+    const bloque = (data.content || []).find(b => b.type === 'text');
+    return bloque ? bloque.text : '(La IA no devolvió texto interpretable.)';
+  }
+
+  if(proveedor === 'openai'){
+    const bloquesImagen = imagenesDataUrl.map(url => ({ type: 'image_url', image_url: { url } }));
+    const respuesta = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: modelo,
+        max_tokens: 1500,
+        messages: [
+          { role: 'system', content: promptSistema },
+          { role: 'user', content: [ { type: 'text', text: instruccionUsuario }, ...bloquesImagen ] }
+        ]
+      })
+    });
+    if(!respuesta.ok) throw new Error(await mensajeErrorApi(respuesta));
+    const data = await respuesta.json();
+    return data.choices?.[0]?.message?.content || '(La IA no devolvió texto interpretable.)';
+  }
+
+  if(proveedor === 'gemini'){
+    const partesImagen = imagenesDataUrl.map(url => ({
+      inline_data: { mime_type: 'image/png', data: url.split(',')[1] }
+    }));
+    const respuesta = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [ { text: `${promptSistema}\n\n${instruccionUsuario}` }, ...partesImagen ]
+        }]
+      })
+    });
+    if(!respuesta.ok) throw new Error(await mensajeErrorApi(respuesta));
+    const data = await respuesta.json();
+    return data.candidates?.[0]?.content?.parts?.map(p=>p.text).join('\n') || '(La IA no devolvió texto interpretable.)';
+  }
+
+  if(proveedor === 'groq'){
+    const bloquesImagen = imagenesDataUrl.map(url => ({ type: 'image_url', image_url: { url } }));
+    const respuesta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: modelo,
+        max_tokens: 1500,
+        messages: [
+          { role: 'system', content: promptSistema },
+          { role: 'user', content: [ { type: 'text', text: instruccionUsuario }, ...bloquesImagen ] }
+        ]
+      })
+    });
+    if(!respuesta.ok) throw new Error(await mensajeErrorApi(respuesta));
+    const data = await respuesta.json();
+    return data.choices?.[0]?.message?.content || '(La IA no devolvió texto interpretable.)';
+  }
+
+  throw new Error('Proveedor de IA no reconocido.');
+}
+
+async function mensajeErrorApi(respuesta){
+  let detalle = '';
+  try{ detalle = (await respuesta.text()).slice(0,200); }catch(e){}
+  return `Error de la API (${respuesta.status}): ${detalle}`;
+}
+
+// ---------- Flujo de análisis ----------
+document.getElementById('btnAnalizar').addEventListener('click', async ()=>{
+  if(!archivosActuales.length) return;
+
+  const categoria = categoriaSel.value;
+  const tipoEstudio = categoria === 'imagen'
+    ? document.getElementById('tipoImagen').value
+    : (tipoFisioSel.value === 'otro'
+        ? (document.getElementById('otroFisioTexto').value.trim() || 'otro')
+        : tipoFisioSel.value);
+  const region = document.getElementById('region').value.trim();
+  const contexto = document.getElementById('contextoClinico').value.trim();
+
+  const statusEl = document.getElementById('analizarStatus');
+  statusEl.innerHTML = `<span class="spinner"></span> Analizando estudio con IA...`;
+  document.getElementById('btnAnalizar').disabled = true;
+
+  try{
+    const referencias = obtenerReferenciasPorDisciplina(tipoEstudio);
+    const promptSistema = construirPromptSistema(categoria, tipoEstudio, region, contexto, referencias, archivosActuales.length);
+    const textoIA = await analizarConIA({
+      imagenesDataUrl: archivosActuales.map(a => a.dataUrlPng),
+      promptSistema
+    });
+
+    casoEnCurso = {
+      id: 'caso_' + Date.now(),
+      fecha: new Date().toISOString(),
+      categoria, tipoEstudio, region, contexto,
+      imagenesDataUrl: archivosActuales.map(a => a.dataUrlPng),
+      imagenDataUrl: archivosActuales[0].dataUrlPng, // portada, para PDF/miniaturas
+      nombresArchivos: archivosActuales.map(a => a.nombre),
+      borradorIA: textoIA,
+      notasFinal: textoIA,
+      estado: 'borrador' // borrador -> revisado -> aprobado
+    };
+
+    document.getElementById('notasMedico').value = textoIA;
+    mostrarResultado(casoEnCurso);
+    statusEl.innerHTML = '';
+  } catch(err){
+    statusEl.innerHTML = `<div class="alert-box error">${err.message}</div>`;
+  } finally {
+    document.getElementById('btnAnalizar').disabled = false;
+  }
+});
+
+function mostrarResultado(caso){
+  document.getElementById('cardResultado').style.display = 'block';
+  document.getElementById('reporteContenido').innerHTML = `
+    <h3>Borrador generado por IA — pendiente de revisión médica</h3>
+    <p>${escaparHtml(caso.borradorIA)}</p>
+  `;
+  actualizarFlowSteps(caso.estado);
+  actualizarBotonesEstado(caso.estado);
+  document.getElementById('cardResultado').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function actualizarFlowSteps(estado){
+  const pasos = [
+    {key:'borrador', label:'Borrador IA'},
+    {key:'revisado', label:'Revisado por médico'},
+    {key:'aprobado', label:'Aprobado y firmado'}
+  ];
+  const idx = pasos.findIndex(p=>p.key===estado);
+  document.getElementById('flowSteps').innerHTML = pasos.map((p,i)=>{
+    const cls = i===idx ? 'step current' : 'step';
+    const arrow = i < pasos.length-1 ? '<span class="arrow">→</span>' : '';
+    return `<span class="${cls}">${p.label}</span>${arrow}`;
+  }).join('');
+}
+
+function actualizarBotonesEstado(estado){
+  document.getElementById('btnMarcarRevisado').style.display = estado==='borrador' ? 'inline-block' : 'none';
+  document.getElementById('btnAprobarFirmar').style.display = estado==='revisado' ? 'inline-block' : 'none';
+  document.getElementById('btnExportarPDF').style.display = estado==='aprobado' ? 'inline-block' : 'none';
+}
+
+document.getElementById('notasMedico').addEventListener('input', e=>{
+  if(casoEnCurso) casoEnCurso.notasFinal = e.target.value;
+});
+
+document.getElementById('btnMarcarRevisado').addEventListener('click', ()=>{
+  if(!casoEnCurso) return;
+  casoEnCurso.estado = 'revisado';
+  guardarOActualizarCaso(casoEnCurso);
+  actualizarFlowSteps(casoEnCurso.estado);
+  actualizarBotonesEstado(casoEnCurso.estado);
+});
+
+document.getElementById('btnAprobarFirmar').addEventListener('click', ()=>{
+  if(!casoEnCurso) return;
+  casoEnCurso.estado = 'aprobado';
+  casoEnCurso.fechaAprobacion = new Date().toISOString();
+  guardarOActualizarCaso(casoEnCurso);
+  actualizarFlowSteps(casoEnCurso.estado);
+  actualizarBotonesEstado(casoEnCurso.estado);
+});
+
+document.getElementById('btnDescartar').addEventListener('click', ()=>{
+  casoEnCurso = null;
+  archivosActuales = [];
+  previewWrap.innerHTML = '';
+  document.getElementById('cardResultado').style.display = 'none';
+  document.getElementById('notasMedico').value = '';
+  actualizarEstadoClave();
+});
+
+function guardarOActualizarCaso(caso){
+  const casos = getCasos();
+  const idx = casos.findIndex(c=>c.id===caso.id);
+  if(idx >= 0) casos[idx] = caso; else casos.push(caso);
+  saveCasos(casos);
+}
+
+// ---------- Exportar PDF ----------
+document.getElementById('btnExportarPDF').addEventListener('click', ()=>{
+  if(!casoEnCurso) return;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+  const margin = 50;
+  let y = margin;
+
+  doc.setFontSize(16);
+  doc.text('CliniMind AI — Reporte de estudio clínico', margin, y); y += 24;
+  doc.setFontSize(10);
+  doc.text(`Fecha del estudio: ${new Date(casoEnCurso.fecha).toLocaleString('es-PA')}`, margin, y); y += 14;
+  doc.text(`Fecha de aprobación: ${casoEnCurso.fechaAprobacion ? new Date(casoEnCurso.fechaAprobacion).toLocaleString('es-PA') : '—'}`, margin, y); y += 14;
+  doc.text(`Tipo de estudio: ${casoEnCurso.tipoEstudio}`, margin, y); y += 14;
+  if(casoEnCurso.region){ doc.text(`Región/área: ${casoEnCurso.region}`, margin, y); y += 14; }
+  y += 8;
+
+  try{
+    doc.addImage(casoEnCurso.imagenDataUrl, 'PNG', margin, y, 200, 200);
+    y += 214;
+  }catch(e){ /* si la imagen no se puede insertar, se omite */ }
+
+  doc.setFontSize(12);
+  doc.text('Hallazgos y reporte final (aprobado por el médico):', margin, y); y += 18;
+  doc.setFontSize(10);
+  const lineas = doc.splitTextToSize(casoEnCurso.notasFinal || '', 512);
+  lineas.forEach(linea=>{
+    if(y > 740){ doc.addPage(); y = margin; }
+    doc.text(linea, margin, y);
+    y += 13;
+  });
+
+  y += 20;
+  doc.setFontSize(9);
+  doc.setTextColor(120);
+  doc.text('Este reporte fue generado con apoyo de análisis interpretativo por IA (CliniMind AI) y revisado, editado y aprobado por el médico responsable.', margin, y, {maxWidth:512});
+  doc.text('No constituye un dispositivo diagnóstico aprobado; el criterio clínico final es responsabilidad del médico firmante.', margin, y+22, {maxWidth:512});
+
+  doc.save(`CliniMind_Reporte_${casoEnCurso.id}.pdf`);
+});
+
+// ---------- Listado de casos ----------
+function renderCasos(){
+  const casos = getCasos().slice().reverse();
+  const lista = document.getElementById('listaCasos');
+  const vacio = document.getElementById('casosVacio');
+  lista.innerHTML = '';
+  vacio.style.display = casos.length ? 'none' : 'block';
+
+  casos.forEach(caso=>{
+    const row = document.createElement('div');
+    row.className = 'case-row';
+    row.innerHTML = `
+      <div>
+        <strong>${etiquetaTipoEstudio(caso.tipoEstudio)}</strong>
+        <div class="meta">${new Date(caso.fecha).toLocaleString('es-PA')} ${caso.region ? '· '+caso.region : ''}</div>
+      </div>
+      <div class="right">
+        <span class="status-badge badge-${caso.estado}">${etiquetaEstado(caso.estado)}</span>
+      </div>
+    `;
+    row.addEventListener('click', ()=> abrirCasoModal(caso));
+    lista.appendChild(row);
+  });
+}
+
+function renderBiblioteca(){
+  const casos = getCasos().filter(c=>c.estado==='aprobado').slice().reverse();
+  const lista = document.getElementById('listaBiblioteca');
+  const vacio = document.getElementById('bibliotecaVacio');
+  lista.innerHTML = '';
+  vacio.style.display = casos.length ? 'none' : 'block';
+
+  casos.forEach(caso=>{
+    const row = document.createElement('div');
+    row.className = 'case-row';
+    row.innerHTML = `
+      <div>
+        <strong>${etiquetaTipoEstudio(caso.tipoEstudio)}</strong>
+        <div class="meta">Aprobado el ${new Date(caso.fechaAprobacion).toLocaleString('es-PA')}</div>
+        <div class="tag-row"><span class="tag">Usado como referencia futura</span></div>
+      </div>
+      <div class="right">
+        <span class="status-badge badge-aprobado">Firmado</span>
+      </div>
+    `;
+    row.addEventListener('click', ()=> abrirCasoModal(caso));
+    lista.appendChild(row);
+  });
+}
+
+function abrirCasoModal(caso){
+  const modal = document.getElementById('modalCaso');
+  document.getElementById('modalCasoContenido').innerHTML = `
+    <h2>${etiquetaTipoEstudio(caso.tipoEstudio)}</h2>
+    <p class="hint">${new Date(caso.fecha).toLocaleString('es-PA')} · ${etiquetaEstado(caso.estado)}</p>
+    <img src="${caso.imagenDataUrl}" style="width:100%;border-radius:8px;border:1px solid #DDE4EA;margin:10px 0;">
+    <div class="report-block">
+      <h3>Notas finales</h3>
+      <p>${escaparHtml(caso.notasFinal || caso.borradorIA)}</p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="btnCerrarCasoModal">Cerrar</button>
+    </div>
+  `;
+  document.getElementById('btnCerrarCasoModal').addEventListener('click', ()=> modal.close());
+  modal.showModal();
+}
+
+function etiquetaTipoEstudio(tipo){
+  const mapa = {
+    radiografia:'Radiografía', tac:'TAC', rm:'Resonancia magnética', ultrasonido:'Ultrasonido',
+    ekg:'Electrocardiograma', impedanciometria:'Impedanciometría', densitometria:'Densitometría ósea'
+  };
+  return mapa[tipo] || (tipo.charAt(0).toUpperCase()+tipo.slice(1));
+}
+function etiquetaEstado(estado){
+  return { borrador:'Borrador IA', revisado:'Revisado', aprobado:'Aprobado y firmado' }[estado] || estado;
+}
+function escaparHtml(str){
+  const div = document.createElement('div');
+  div.innerText = str || '';
+  return div.innerHTML;
+}
+</script>
+</body>
+</html>
